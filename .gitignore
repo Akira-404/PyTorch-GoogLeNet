@@ -6,3 +6,4 @@ venv/
 __pycache__/
 
 class_indices.json
+model_data.pth

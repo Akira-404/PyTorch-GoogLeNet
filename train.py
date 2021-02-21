@@ -10,7 +10,7 @@ from tqdm import tqdm
 from model import GoogleNet
 
 
-def main():
+def train():
     data_transform = {
         "train": transforms.Compose([transforms.RandomResizedCrop(224),
                                      transforms.RandomHorizontalFlip(),
@@ -20,19 +20,26 @@ def main():
                                    transforms.ToTensor(),
                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])}
 
-    data_root = os.path.abspath(os.path.join(os.getcwd(), "../.."))  # get data root path
-    image_path = os.path.join(data_root, "data_set", "flower_data")  # flower data set path
-    assert os.path.exists(image_path), "{} path does not exist.".format(image_path)
+
+    #训练集数据地址
+    image_path="/home/lee/pyCode/dl_data/flower_photos"
+    assert os.path.exists(image_path), "{} 路径不存在.".format(image_path)
 
     train_dataset = datasets.ImageFolder(root=os.path.join(image_path, "train"),
                                          transform=data_transform["train"])
     train_num = len(train_dataset)
 
-    # {'daisy':0, 'dandelion':1, 'roses':2, 'sunflower':3, 'tulips':4}
+    print("classes:",train_dataset.classes)  # 根据分类文件夹的名字来确定的类别
+    print("class_to_idx:",train_dataset.class_to_idx)  # 按顺序为这些类别定义索引为0,1...
+    # print("",train_dataset.imgs)  # 返回从所有文件夹中得到的图片的路径以及其类别
+
+    #将类型和索引反序并保持到json文件
     flower_list = train_dataset.class_to_idx
     cla_dict = dict((val, key) for key, val in flower_list.items())
-    # write dict into json file
+    print("cla_dict:",cla_dict)
+
     json_str = json.dumps(cla_dict, indent=4)
+
     with open('class_indices.json', 'w') as json_file:
         json_file.write(json_str)
 
@@ -57,38 +64,43 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("using {} device.".format(device))
 
-    net = GoogleNet(num_classes=1000, aux_logits=True, init_weights=True)
-    net.to(device)
-    loss_function = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(net.parameters(), lr=0.0003)
+    isTrain=True
+    if isTrain:
+        net = GoogleNet(num_classes=5, aux_logits=True, init_weights=True)
+        net.to(device)
+        loss_function = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(net.parameters(), lr=0.0003)
 
-    epochs = 30
-    best_acc = 0.0
-    save_path = "../model_data"
-    train_steps = len(train_loader)
+        epochs = 30
+        best_acc = 0.0
+        save_path = "./model_data.pth"
+        if os.path.exists(save_path):
+            os.mkdir(save_path)
 
-    for epoch in range(epochs):
-        net.train()
-        running_loss = 0.0
-        train_bar = tqdm(train_loader)
-        for step, data in enumerate(train_bar):
-            images, labels = data
-            optimizer.zero_grad()
-            logits, aux_logits2, aux_logits1 = net(images.to(device))
+        train_steps = len(train_loader)
 
-            loss0 = loss_function(logits, labels.to(device))
-            loss1 = loss_function(aux_logits1, labels.to(device))
-            loss2 = loss_function(aux_logits2, labels.to(device))
+        for epoch in range(epochs):
+            # train
+            net.train()
+            running_loss = 0.0
+            train_bar = tqdm(train_loader)
+            for step, data in enumerate(train_bar):
+                images, labels = data
+                optimizer.zero_grad()
+                logits, aux_logits2, aux_logits1 = net(images.to(device))
+                loss0 = loss_function(logits, labels.to(device))
+                loss1 = loss_function(aux_logits1, labels.to(device))
+                loss2 = loss_function(aux_logits2, labels.to(device))
+                loss = loss0 + loss1 * 0.3 + loss2 * 0.3
+                loss.backward()
+                optimizer.step()
 
-            loss = loss0 + loss1 * 0.3 + loss2 * 0.3
+                # print statistics
+                running_loss += loss.item()
 
-            loss.backward()
-            optimizer.step()
-
-            running_loss += loss.item()
-            train_bar.desc = "train epoch[{}/{}] loss:{:.3f}".format(epoch + 1,
-                                                                     epochs,
-                                                                     loss)
+                train_bar.desc = "train epoch[{}/{}] loss:{:.3f}".format(epoch + 1,
+                                                                         epochs,
+                                                                         loss)
 
             # validate
             net.eval()
@@ -109,8 +121,8 @@ def main():
                 best_acc = val_accurate
                 torch.save(net.state_dict(), save_path)
 
-        print('Finished Training')
+            print('训练完成')
 
 
 if __name__ == "__main__":
-    main()
+    train()
