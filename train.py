@@ -46,7 +46,8 @@ def train():
     batch_size = 32
 
     # os.cpu_count()Python中的方法用于获取系统中的CPU数量
-    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers
+    # number of workers
+    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])
     print('Using {} dataloader workers every process'.format(nw))
 
     train_loader = DataLoader(train_dataset,
@@ -66,7 +67,7 @@ def train():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("using {} device.".format(device))
 
-    isTrain = False
+    isTrain = True
     if isTrain:
         # 5分类，使用辅助分类器，初始化权重
         net = GoogleNet(num_classes=5, aux_logits=True, init_weights=True)
@@ -77,8 +78,6 @@ def train():
         epochs = 30
         best_acc = 0.0
         save_path = "./model_data.pth"
-        if os.path.exists(save_path):
-            os.mkdir(save_path)
 
         train_steps = len(train_loader)
 
@@ -117,15 +116,17 @@ def train():
 
                 for val_data in val_bar:
                     val_images, val_labels = val_data
-                    outputs = net(val_images.to(device))  # eval model only have last output layer
+                    # eval model only have last output layer
+                    outputs = net(val_images.to(device))
                     predict_y = torch.max(outputs, dim=1)[1]
-                    acc += torch.eq(predict_y, val_labels.to(device)).sum().item()
+                    acc += torch.eq(predict_y,
+                                    val_labels.to(device)).sum().item()
 
             val_accurate = acc / val_num
             print('[epoch %d] train_loss: %.3f  val_accuracy: %.3f' %
                   (epoch + 1, running_loss / train_steps, val_accurate))
 
-            #只保存最好的一次结果
+            # 只保存最好的一次结果
             if val_accurate > best_acc:
                 best_acc = val_accurate
                 torch.save(net.state_dict(), save_path)
@@ -135,3 +136,4 @@ def train():
 
 if __name__ == "__main__":
     train()
+
